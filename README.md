@@ -37,7 +37,7 @@ The application uses the following Python libraries:
 2. Open the directory in your terminal.
 
    ```bash
-   cd TaskManager
+   cd task-manager
    ```
 
 3. Install the dependencies:
@@ -48,9 +48,9 @@ The application uses the following Python libraries:
 
 4. Download and setup [MySQL](https://dev.mysql.com/downloads/).
 
-4. Edit the database connection credentials in `main.py`.
+5. Edit the database connection credentials in `main.py`.
 
-5. Run the application:
+6. Run the application:
 
    ```bash
    python main.py
