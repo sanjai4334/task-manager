@@ -1,4 +1,4 @@
-# Importing necessary modules and libraries
+# Import necessary modules and libraries
 from customtkinter import (
     CTk,
     CTkFrame,
@@ -7,115 +7,91 @@ from customtkinter import (
     CTkEntry,
     CTkScrollableFrame,
     CTkImage,
+    CTkToplevel,
+    CTkLabel,
 )
+from tkinter import END, IntVar
 from PIL import Image
-from tkinter import END
 import pymysql
-
 
 # Database connection credentials
 sqlCred = {
     "host": "localhost",
-    "user": "username",
-    "password": "password",
+    "user": "python",
+    "password": "python",
     "database": None,
-    "port": 3306,
+    "port": 9999,
 }
 
+# Class for managing tasks
+class TaskManager:
+    def __init__(self, masterFrame: CTkScrollableFrame):
+        # Dictionary to store task information
+        self.taskList = dict()
+        self.master = masterFrame
+        self.hideCompleted = False
 
-# Class for managing a stack of completed tasks
-class TaskStack:
-    def __init__(self):
-        self.stack = []
-
-    def push(self, taskString, isInitializing=False):
-        # Marks a task as completed in the database
-        if not isInitializing:
-            cursor.execute(
-                "UPDATE taskTable SET status=1 WHERE taskString=%s", (taskString)
-            )
-        undoButton.configure(state="normal")
-        self.stack.append(taskString)
-
-    def pop(self) -> str:
-        # Marks the most recently completed task as incomplete in the database
-        taskString = self.stack.pop()
-        if not self.stack:
-            undoButton.configure(state="disabled")
-
-        cursor.execute(
-            "UPDATE taskTable SET status=0 WHERE taskString=%s", (taskString)
-        )
-        return taskString
-
-# Instance of TaskStack for completed tasks
-completedTasks = TaskStack()
-
-# Class for managing the list of tasks displayed in the UI
-class TaskList:
-    def __init__(self, master: CTkFrame):
-        self.master = master
-        self.taskItems = dict()
-
-    def append(self, taskInfo: str):
-        # Adds a new task to the list
-        if len(taskInfo) > 37:
+    def addTask(self, taskString: str, taskStatus: int = 0, initialize: bool = False):
+        # Create a task item based on the length of the task string
+        if not len(taskString.strip()):
+            return
+        deleteButton.configure(state="normal")
+        taskInput.delete(0, END)
+        if len(taskString) > 26:
             taskItem = CTkScrollableFrame(
                 master=self.master, orientation="horizontal", height=40
             )
         else:
             taskItem = CTkFrame(master=self.master)
 
-        taskCheck = CTkCheckBox(master=taskItem, text=taskInfo, font=("monospace", 15))
-        taskCheck.configure(command=lambda: self.remove(taskCheck.__hash__()))
+        # Create a checkbox for the task
+        taskCheck = CTkCheckBox(
+            master=taskItem,
+            text=taskString,
+            font=("monospace", 15),
+        )
+        # Store task information in the taskList dictionary
+        self.taskList[taskCheck.__hash__()] = [taskItem, taskCheck, taskString]
+
+        # Set up the checkbox variable and configure its command
+        checkbox_var = IntVar()
+        checkbox_var.set(taskStatus)
+        taskCheck.configure(
+            command=lambda: self.update(self.taskList[taskCheck.__hash__()]),
+            variable=checkbox_var,
+        )
+
+        # Configure the checkbox appearance and pack the task item
         taskCheck.anchor("w")
         taskCheck.grid(padx=10, pady=10)
+        taskItem.pack(padx=10, pady=10, fill="x")
 
-        self.taskItems[taskCheck.__hash__()] = [taskItem, taskInfo]
-        self.load()
+        # Insert the task into the database if not initializing
+        if not initialize:
+            cursor.execute("INSERT INTO taskTable VALUES (%s, 0);", (taskString))
+            displayDB()
 
-    def remove(self, taskItemHash):
-        # Removes a task and stores it in the completed task stack
-        taskItem = self.taskItems.pop(taskItemHash)
-        taskItem[0].destroy()
+    def update(self, taskItem):
+        # Update the task status in the database and display it
+        cursor.execute(
+            "UPDATE taskTable SET status=%s WHERE taskString=%s;",
+            (taskItem[1].get(), taskItem[2]),
+        )
+        displayDB()
+        # Hide or show the task based on completion status and hideCompleted flag
+        if self.hideCompleted and taskItem[1].get():
+            taskItem[0].forget()
+            if isinstance(taskItem[0], CTkScrollableFrame):
+                taskItem[0]._parent_frame.forget()
+        elif not self.hideCompleted:
+            taskItem[0].pack(padx=10, pady=10, fill="x")
 
-        if isinstance(taskItem[0], CTkScrollableFrame):
-            taskItem[0]._parent_frame.destroy()
+    def showOrHideCompleted(self, status: bool):
+        # Set the hideCompleted flag and update tasks accordingly
+        self.hideCompleted = status
+        for item in self.taskList.values():
+            self.update(item)
 
-        completedTasks.push(taskItem[1])
-        cursor.execute("SELECT * FROM taskTable;")
-        print(cursor.fetchall())
-
-    def load(self):
-        # Displays all the current tasks
-        taskItem: CTkFrame
-        for taskItem in self.taskItems.values():
-            taskItem[0].pack(padx=10, pady=10, fill="x")  # type: ignore
-        cursor.execute("SELECT * FROM taskTable;")
-        print(cursor.fetchall())
-
-# Function to add a task
-def addTask():
-    taskString = taskInput.get()
-    if taskString:
-        # Inserts a new task into the database and adds it to the task list
-        cursor.execute("INSERT INTO taskTable VALUES (%s, 0);", (taskString))
-        taskList.append(taskString)
-        taskInput.delete(0, END)
-
-# Function to toggle between showing completed and incomplete tasks
-def showCompletedTasks():
-    if showCompletedButton.cget("text") == "Show Completed":
-        showCompletedButton.configure(text="Show Incomplete")
-
-        for widget in taskManagerFrame.children.values():
-            widget.configure(state="disabled")  # type: ignore
-
-    else:
-        showCompletedButton.configure(text="Show Completed")
-
-        for widget in taskManagerFrame.children.values():
-            widget.configure(state="normal")  # type: ignore
 
 # Database Initialization
 with pymysql.connect(
@@ -142,8 +118,48 @@ cursor = connection.cursor()
 # Creating the taskTable if it doesn't exist
 cursor.execute("CREATE TABLE IF NOT EXISTS taskTable(taskString TEXT, status INTEGER);")
 
-# Function to close the database connection and exit the application
+def displayDB():
+    # Display tasks from the database
+    cursor.execute("SELECT * FROM taskTable;")
+    tableRows = cursor.fetchall()
+    print("=" * 50)
+    for row in tableRows:
+        print(row[0], ":", row[1])
+
+def proceedDeleting(option: str, warning: CTkToplevel):
+    if option == "delete":
+        deleteButton.configure(state="disabled")
+        cursor.execute("DELETE FROM taskTable;")
+        for taskItem in taskManager.taskList.values():
+            taskItem[0].destroy()
+            if isinstance(taskItem[0], CTkScrollableFrame):
+                taskItem[0]._parent_frame.destroy()
+        del taskManager.taskList
+        taskManager.taskList = dict()
+    warning.destroy()
+    app.update()
+
+def deleteData():
+    deleteWarning = CTkToplevel()
+    deleteWarning.resizable(False, False)
+    deleteWarning.grab_set()
+    warningLabel = CTkLabel(master=deleteWarning, text="⚠️This will erase all data⚠️")
+    warningLabel.grid(row=0, column=0, columnspan=2, padx=10, pady=10)
+    proceedButton = CTkButton(
+        master=deleteWarning,
+        text="Proceed",
+        command=lambda: proceedDeleting("delete", deleteWarning),
+    )
+    proceedButton.grid(row=1, column=0, padx=10, pady=10)
+    cancelButton = CTkButton(
+        master=deleteWarning,
+        text="Cancel",
+        command=lambda: proceedDeleting("cancel", deleteWarning),
+    )
+    cancelButton.grid(row=1, column=1, padx=10, pady=10)
+
 def close_connection():
+    # Close the database connection and exit the application
     cursor.close()
     connection.commit()
     connection.close()
@@ -152,8 +168,8 @@ def close_connection():
 # UI Definition
 app = CTk()
 app.title("Personal Task Manager")
-app.geometry("450x550")
-app.minsize(450, 550)
+app.geometry("370x550")
+app.minsize(370, 550)
 app.resizable(False, True)
 app.iconbitmap("./images/taskManagerIcon.ico")
 
@@ -169,47 +185,44 @@ taskManagerFrame.pack(padx=10, pady=10, fill="x")
 taskInput = CTkEntry(master=taskManagerFrame, width=225)
 taskInput.grid(row=0, column=0, padx=10, pady=10)
 
-# Button to add a task
-addTaskButton = CTkButton(
-    master=taskManagerFrame, text="ADD", width=60, command=addTask
-)
-addTaskButton.grid(row=0, column=1, padx=10, pady=10)
-
-# Undo button with undo icon
-undoIcon = Image.open("./images/undo.png")
-undoButton = CTkButton(
-    master=taskManagerFrame,
-    text=None,  # type: ignore
-    image=CTkImage(undoIcon),
-    width=60,
-    command=lambda: taskList.append(completedTasks.pop()),
-    state="disabled",
-)
-undoButton.grid(row=0, column=2, padx=10, pady=10)
-
 # Scrollable frame for displaying the list of tasks
 taskListFrame = CTkScrollableFrame(master=mainFrame)
 taskListFrame.pack(padx=10, pady=10, expand=True, fill="both")
 
-# Button to toggle between showing completed and incomplete tasks
-showCompletedButton = CTkButton(
-    master=mainFrame, text="Show Completed", command=showCompletedTasks
+# Initialize the task manager
+taskManager = TaskManager(taskListFrame)
+
+# Button to add a task
+addTaskButton = CTkButton(
+    master=taskManagerFrame,
+    text="ADD",
+    width=60,
+    command=lambda: taskManager.addTask(taskInput.get()),
 )
+addTaskButton.grid(row=0, column=1, padx=10, pady=10)
 
-taskList = TaskList(taskListFrame)  # type: ignore
+# Button to toggle between hiding and showing tasks
+hideCompletedCheck = CTkCheckBox(
+    master=taskManagerFrame, text="Hide Completed", font=("monospace", 15)
+)
+hideCompletedCheck.configure(
+    command=lambda: taskManager.showOrHideCompleted(hideCompletedCheck.get())
+)
+hideCompletedCheck.grid(row=1, column=0, padx=10, pady=10)
 
-# Add tasks to taskStack and taskList
-cursor.execute("SELECT taskString FROM taskTable WHERE status=0")
-incompleteTaskList = cursor.fetchall()
-if incompleteTaskList:
-    for taskString in incompleteTaskList:
-        taskList.append(taskString[0])
+deleteButton = CTkButton(
+    master=taskManagerFrame,
+    text=None,
+    width=60,
+    image=CTkImage(Image.open("./images/bin.png")),
+    command=deleteData,
+)
+deleteButton.grid(row=1, column=1, padx=10, pady=10)
 
-cursor.execute("SELECT taskString FROM taskTable WHERE status=1")
-completedTaskList = cursor.fetchall()
-if completedTaskList:
-    for taskString in completedTaskList:
-        completedTasks.push(taskString[0], True)
+# Populate the task manager with tasks from the database
+cursor.execute("SELECT * FROM taskTable;")
+for row in cursor.fetchall():
+    taskManager.addTask(row[0], row[1], True)
 
 # Application close protocol
 app.protocol("WM_DELETE_WINDOW", close_connection)

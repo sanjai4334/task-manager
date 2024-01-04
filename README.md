@@ -1,13 +1,15 @@
 # Personal Task Manager
 
-The Personal Task Manager is a simple task management application developed in Python. It provides a graphical user interface (GUI) for users to manage their tasks by adding, completing, and undoing tasks.
+The Personal Task Manager is a Python-based task management application with a graphical user interface (GUI). It empowers users to effortlessly manage their tasks by adding, deleting, marking them as completed.
 
 ## Features
 
 - Add tasks to the task list.
 - Mark tasks as completed.
-- Undo completed tasks.
-- Database storage for persisting task information.
+- Toggle between hiding and showing completed tasks.
+- Delete all tasks and reset the application.
+
+Tasks are automatically saved to the database when added, marked as completed, or undone. The task list will reload from the database when the application is restarted.
 
 ## Table of Contents
 
@@ -60,9 +62,10 @@ The application uses the following Python libraries:
 
 The application provides a simple GUI for managing tasks:
 
-- Type a task description into the input field and click the Add button to add it to the list.
+- Type a task description into the input field and click the "ADD" button to add it to the list.
 - Click the checkbox next to a task to mark it as completed.
-- Click the Undo button to undo the last completed task.
+- Click the "Hide Completed" checkbox to toggle between hiding and showing completed tasks.
+- Click the trash can icon button to delete all tasks and reset the application.
 
 Tasks are automatically saved to the database when added, marked as completed, or undone. The task list will reload from the database when the application is restarted.
 
@@ -81,6 +84,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE.txt) 
 ## Screenshots
 
 <img src="screenshots/EmptyPage.png" width="300">
+
 <img src="screenshots/TaskListed.png" width="300">
 
+<img src="screenshots/CompletedTaskHidden.png" width="300">
+
 <img src="screenshots/LongVsShortDescription.png" width="300">
+
+<img src="screenshots/DeletionWarning.png" width="300">
